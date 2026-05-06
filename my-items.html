@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Items — Registry Demo</title>
+  <meta name="description" content="Demo version of Max & Jessie's baby registry, built on the Are.na API.">
+  <meta name="theme-color" content="#ff0095">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Baby Registry Demo">
+  <meta property="og:description" content="Demo version of a baby registry, built on the Are.na API.">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Baby Registry Demo">
+  <meta name="twitter:description" content="Demo version of a baby registry, built on the Are.na API.">
+
+  <link rel="stylesheet" href="https://use.typekit.net/qcb0sxc.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .my-items-page { max-width: 640px; margin: 0 auto; padding: 3rem 1.5rem; }
+    .my-items-page h1 { font-family: var(--font-script); font-size: 2.5rem; font-weight: 100; color: #ff0095; margin-bottom: 0.25rem; }
+    .my-items-page .page-subtitle { color: #555; margin-bottom: 2rem; font-size: 0.95rem; }
+
+    /* Lookup form */
+    .lookup-form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .lookup-form input[type=email] { flex: 1; min-width: 200px; border: 1px solid #000; padding: 0.4rem 0.75rem; font-family: var(--font-lcd); font-size: 0.85rem; }
+    .lookup-form input[type=email]:focus { outline: 2px solid #ff0095; outline-offset: 1px; }
+
+    /* Claim cards */
+    .claim-card {
+      border: 1px solid #000;
+      margin-bottom: 1.5rem;
+      background: white;
+    }
+    .claim-card-top { display: flex; gap: 1rem; padding: 1rem; }
+    .claim-thumb { width: 90px; height: 90px; object-fit: cover; flex-shrink: 0; background: #f0e6f6; }
+    .claim-thumb-placeholder { width: 90px; height: 90px; flex-shrink: 0; background: #f0e6f6; display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+    .claim-info { flex: 1; min-width: 0; }
+    .claim-item-name { font-weight: bold; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .claim-item-price { font-family: var(--font-lcd); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .claim-item-notes { font-size: 0.8rem; color: #555; margin-bottom: 0.5rem; }
+    .claim-buy-btn { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 0.35rem 0.85rem; font-family: var(--font-lcd); font-size: 0.8rem; font-weight: bold; }
+    .claim-buy-btn:hover { background: #333; }
+
+    .claim-card-bottom { border-top: 1px solid #eee; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .claim-field label { display: block; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; color: #555; }
+    .claim-field textarea,
+    .claim-field input[type=text] { width: 100%; border: 1px solid #ccc; padding: 0.4rem 0.6rem; font-size: 0.85rem; font-family: inherit; resize: vertical; box-sizing: border-box; }
+    .claim-field textarea:focus,
+    .claim-field input[type=text]:focus { outline: 2px solid #ff0095; outline-offset: 1px; border-color: transparent; }
+
+    .claim-card-actions { display: flex; justify-content: space-between; align-items: center; padding: 0 1rem 1rem; }
+    .save-btn { background: #000; color: #fff; border: none; padding: 0.35rem 1rem; font-family: var(--font-lcd); font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+    .save-btn:hover { background: #333; }
+    .save-btn:disabled { background: #999; cursor: default; }
+    .unclaim-btn { background: none; border: none; font-size: 0.8rem; color: #999; cursor: pointer; text-decoration: underline; font-family: inherit; }
+    .unclaim-btn:hover { color: #c00; }
+    .save-status { font-size: 0.78rem; color: #166534; }
+
+    .no-claims { text-align: center; padding: 3rem 0; color: #777; }
+    .no-claims a { color: #ff0095; }
+
+    .claims-address { display: block; text-align: center; font-weight: bold; }
+
+    .back-link { display: inline-block; margin-top: 1.5rem; font-size: 0.85rem; color: #777; text-decoration: none; }
+    .back-link:hover { color: #000; }
+
+    @media (max-width: 480px) {
+      .claim-card-top { flex-direction: column; }
+      .claim-thumb, .claim-thumb-placeholder { width: 100%; height: 180px; }
+    }
+  </style>
+</head>
+<body>
+<div class="my-items-page">
+  <h1>My Items</h1>
+  <p class="page-subtitle">Enter your email to see what you've claimed.
+  </p>
+
+  <form class="lookup-form" id="lookup-form">
+    <input type="email" id="email-input" placeholder="your@email.com" autocomplete="email" required>
+    <button type="submit" class="btn-primary">Look up</button>
+  </form>
+
+  <div id="claims-list"></div>
+
+  <a href="/" class="back-link">← Back to registry</a>
+</div>
+
+<script>
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const emailFromUrl = params.get("email");
+
+  if (emailFromUrl) {
+    document.getElementById("email-input").value = emailFromUrl;
+    loadClaims(emailFromUrl);
+  }
+
+  document.getElementById("lookup-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email-input").value.trim();
+    if (!email) return;
+    history.replaceState(null, "", `?email=${encodeURIComponent(email)}`);
+    loadClaims(email);
+  });
+
+  async function loadClaims(email) {
+    const list = document.getElementById("claims-list");
+    list.innerHTML = "<p style='color:#777;font-size:0.9rem'>Loading…</p>";
+
+    try {
+      const res = await fetch(`/.netlify/functions/claim-lookup?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load");
+      renderClaims(data.claims, email);
+    } catch (err) {
+      list.innerHTML = `<p style='color:#c00;font-size:0.9rem'>Error: ${err.message}</p>`;
+    }
+  }
+
+  function renderClaims(claims, email) {
+    const list = document.getElementById("claims-list");
+    list.innerHTML = "";
+
+    if (claims.length === 0) {
+      list.innerHTML = `<div class="no-claims"><p>No claims found for that email.</p><p><a href="/">Back to registry</a> to claim something!</p></div>`;
+      return;
+    }
+
+    const instructions = document.createElement("div");
+    instructions.className = "claims-instructions";
+    const itemWord = claims.length === 1 ? "an item" : "items";
+    instructions.innerHTML = `<p>Thank you for claiming ${itemWord}! This is what it looks like when a product is claimed. We provide a product link, but people can purchase from wherever they want. We usually put our mailing address here: <br><br><span class="claims-address">Jessie Char <br>[Redacted Address]<br>[Redacted Address]</span><br><br>Anyone can come back to the site and enter their email address to view items they've claimed and update the the status if they need to. </p>`;
+    list.appendChild(instructions);
+
+    claims.forEach((claim) => {
+      const card = document.createElement("div");
+      card.className = "claim-card";
+      card.dataset.claimId = claim.claimId;
+
+      const priceStr = claim.itemPrice != null
+        ? "$" + Number(claim.itemPrice).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+        : "";
+
+      const qtyOptions = claim.quantityWanted > 1
+        ? Array.from({ length: claim.maxQuantity }, (_, i) => i + 1)
+            .map(n => `<option value="${n}"${n === claim.quantity ? " selected" : ""}>${n}</option>`)
+            .join("")
+        : "";
+
+      card.innerHTML = `
+        <div class="claim-card-top">
+          ${claim.itemImage
+            ? `<img class="claim-thumb" src="${claim.itemImage}" alt="${claim.itemName}">`
+            : `<div class="claim-thumb-placeholder">🎁</div>`}
+          <div class="claim-info">
+            ${priceStr ? `<p class="claim-item-price">${priceStr}</p>` : ""}
+            <p class="claim-item-name">${claim.itemName}</p>
+            ${claim.itemNotes ? `<p class="claim-item-notes">${claim.itemNotes}</p>` : ""}
+            ${claim.itemUrl ? `<a class="claim-buy-btn" href="${claim.itemUrl}" target="_blank" rel="noopener">Buy this item ↗</a>` : ""}
+          </div>
+        </div>
+        <div class="claim-card-bottom">
+          <div class="claim-field">
+            <label>From</label>
+            <input type="text" data-field="claimedBy" value="${claim.claimedBy}">
+          </div>
+          ${claim.quantityWanted > 1 ? `
+          <div class="claim-field">
+            <label>Quantity</label>
+            <select data-field="quantity">${qtyOptions}</select>
+          </div>` : ""}
+          <div class="claim-field">
+            <label>Gift note (optional)</label>
+            <textarea rows="2" data-field="giftNote">${claim.giftNote}</textarea>
+          </div>
+          <div class="claim-field">
+            <label>Tracking number (optional)</label>
+            <input type="text" data-field="trackingNumber" value="${claim.trackingNumber}" placeholder="e.g. 1Z999AA10123456784">
+          </div>
+        </div>
+        <div class="claim-card-actions">
+          <button class="unclaim-btn" type="button">Unclaim this item</button>
+          <span class="save-status" hidden></span>
+          <button class="save-btn" type="button">Save</button>
+        </div>
+      `;
+
+      // Save button
+      card.querySelector(".save-btn").addEventListener("click", async () => {
+        const btn = card.querySelector(".save-btn");
+        const status = card.querySelector(".save-status");
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+        status.hidden = true;
+
+        try {
+          const res = await fetch("/.netlify/functions/update-claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              claimId: claim.claimId,
+              claimedBy: card.querySelector("[data-field=claimedBy]").value,
+              quantity: parseInt((card.querySelector("[data-field=quantity]") || {}).value, 10) || 1,
+              giftNote: card.querySelector("[data-field=giftNote]").value,
+              trackingNumber: card.querySelector("[data-field=trackingNumber]").value,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to save");
+          btn.textContent = "Saved ✓";
+          status.hidden = true;
+          setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
+        } catch (err) {
+          btn.textContent = "Save";
+          btn.disabled = false;
+          status.textContent = "Error: " + err.message;
+          status.style.color = "#c00";
+          status.hidden = false;
+        }
+      });
+
+      // Unclaim button
+      card.querySelector(".unclaim-btn").addEventListener("click", async () => {
+        if (!confirm(`Remove your claim on "${claim.itemName}"?`)) return;
+        try {
+          const res = await fetch("/.netlify/functions/unclaim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ claimId: claim.claimId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to unclaim");
+          card.remove();
+          if (document.querySelectorAll(".claim-card").length === 0) {
+            loadClaims(email); // re-render empty state
+          }
+        } catch (err) {
+          alert("Error: " + err.message);
+        }
+      });
+
+      list.appendChild(card);
+    });
+  }
+})();
+</script>
+</body>
+</html>

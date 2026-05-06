@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Registry Demo</title>
+  <meta name="description" content="Demo version of Max & Jessie's baby registry, built on the Are.na API.">
+  <meta name="theme-color" content="#ff0095">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Baby Registry Demo">
+  <meta property="og:description" content="Demo version of a baby registry, built on the Are.na API.">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Baby Registry Demo">
+  <meta name="twitter:description" content="Demo version of a baby registry, built on the Are.na API.">
+
+  <link rel="stylesheet" href="https://use.typekit.net/qcb0sxc.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .admin-page { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+    .admin-page h1 { font-family: var(--font-script); font-size: 2.5rem; font-weight: 100; color: #ff0095; margin-bottom: 0.25rem; }
+    .admin-subtitle { color: #555; font-size: 0.9rem; margin-bottom: 2rem; }
+
+    /* Gate */
+    #gate { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    #gate input { flex: 1; min-width: 200px; border: 1px solid #000; padding: 0.4rem 0.75rem; font-family: var(--font-lcd); font-size: 0.85rem; }
+    #gate input:focus { outline: 2px solid #ff0095; outline-offset: 1px; }
+
+    /* Summary */
+    #summary { font-size: 0.85rem; color: #555; margin-bottom: 1.5rem; font-family: var(--font-lcd); }
+
+    /* Section headers */
+    .admin-section-heading {
+      font-family: var(--font-lcd); font-size: 0.75rem; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.08em; color: #888;
+      margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #ddd; padding-bottom: 0.4rem;
+    }
+    .admin-section-heading:first-child { margin-top: 0; }
+
+    /* Item cards */
+    .admin-item { border: 1px solid #000; background: #fff; margin-bottom: 1rem; }
+
+    .admin-item-main { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; }
+    .admin-thumb { width: 72px; height: 72px; object-fit: cover; display: block; background: #f0e6f6; flex-shrink: 0; }
+    .admin-thumb-placeholder { width: 72px; height: 72px; background: #f0e6f6; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; }
+
+    .admin-info { flex: 1; min-width: 0; }
+    .admin-item-name { font-weight: bold; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 0.2rem; }
+    .admin-item-price { font-family: var(--font-lcd); font-size: 0.85rem; color: #333; margin-bottom: 0.2rem; }
+    .admin-item-url { font-size: 0.78rem; color: #555; text-decoration: none; display: inline-block; margin-bottom: 0.3rem; }
+    .admin-item-url:hover { color: #ff0095; }
+    .admin-item-notes { font-size: 0.78rem; color: #888; }
+
+    .admin-item-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; flex-shrink: 0; }
+    .admin-badge {
+      font-family: var(--font-lcd); font-size: 0.75rem; font-weight: bold;
+      padding: 0.2rem 0.6rem; border: 1px solid currentColor; white-space: nowrap;
+    }
+    .admin-badge.unclaimed { color: #888; border-color: #ccc; }
+    .admin-badge.claimed { color: #166534; border-color: #166534; background: #f0fdf4; }
+    .admin-arena-link {
+      font-size: 0.75rem; font-family: var(--font-lcd);
+      color: #555; text-decoration: none; border: 1px solid #ccc;
+      padding: 0.2rem 0.6rem; white-space: nowrap;
+    }
+    .admin-arena-link:hover { background: #000; color: #fff; border-color: #000; }
+
+    /* Claim details */
+    .admin-claim-details {
+      border-top: 1px solid #eee; padding: 0.75rem 1rem;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.4rem 1.5rem; font-size: 0.8rem;
+    }
+    .admin-claim-field label { display: block; font-size: 0.68rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 0.1rem; }
+    .admin-claim-field span { color: #000; word-break: break-word; }
+    .admin-claim-field span:empty::before { content: "—"; color: #bbb; }
+
+    .back-link { display: inline-block; margin-top: 1.5rem; font-size: 0.85rem; color: #777; text-decoration: none; }
+    .back-link:hover { color: #000; }
+  </style>
+</head>
+<body>
+<div class="admin-page">
+  <h1>Registry Admin</h1>
+  <p class="admin-subtitle">All items and claim details.</p>
+
+  <div id="gate">
+    <input type="password" id="secret-input" placeholder="Admin password" autocomplete="current-password">
+    <button class="btn-primary" id="secret-btn">Enter</button>
+  </div>
+
+  <div id="summary" hidden></div>
+  <div id="items-list"></div>
+
+  <a href="/" class="back-link">← Back to registry</a>
+</div>
+
+<script>
+(function () {
+  let SECRET = sessionStorage.getItem("admin_secret") || new URLSearchParams(location.search).get("secret") || "";
+  if (SECRET) {
+    document.getElementById("secret-input").value = SECRET;
+    load();
+  }
+
+  document.getElementById("secret-btn").addEventListener("click", () => {
+    SECRET = document.getElementById("secret-input").value.trim();
+    if (!SECRET) return;
+    sessionStorage.setItem("admin_secret", SECRET);
+    load();
+  });
+
+  document.getElementById("secret-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("secret-btn").click();
+  });
+
+  async function load() {
+    const list = document.getElementById("items-list");
+    const summary = document.getElementById("summary");
+    list.innerHTML = "<p style='color:#777;font-size:0.9rem'>Loading…</p>";
+    summary.hidden = true;
+
+    try {
+      const res = await fetch(`/.netlify/functions/admin-items?secret=${encodeURIComponent(SECRET)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load");
+      render(data.items);
+    } catch (err) {
+      list.innerHTML = `<p style='color:#c00;font-size:0.9rem'>Error: ${err.message}</p>`;
+    }
+  }
+
+  function render(items) {
+    const list = document.getElementById("items-list");
+    const summary = document.getElementById("summary");
+    list.innerHTML = "";
+
+    const claimed = items.filter(i => i.claimed);
+    const unclaimed = items.filter(i => !i.claimed);
+
+    const claimedCount = claimed.length;
+    summary.textContent = `${items.length} items · ${claimedCount} claimed · ${unclaimed.length} available`;
+    summary.hidden = false;
+
+    if (claimed.length) {
+      const heading = document.createElement("p");
+      heading.className = "admin-section-heading";
+      heading.textContent = `Claimed (${claimed.length})`;
+      list.appendChild(heading);
+      claimed.forEach(item => list.appendChild(buildCard(item)));
+    }
+
+    if (unclaimed.length) {
+      const heading = document.createElement("p");
+      heading.className = "admin-section-heading";
+      heading.textContent = `Available (${unclaimed.length})`;
+      list.appendChild(heading);
+      unclaimed.forEach(item => list.appendChild(buildCard(item)));
+    }
+  }
+
+  function buildCard(item) {
+    const el = document.createElement("div");
+    el.className = "admin-item";
+
+    const priceStr = item.price != null
+      ? "$" + Number(item.price).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+      : "";
+
+    const thumbHtml = item.image
+      ? `<img class="admin-thumb" src="${item.image}" alt="">`
+      : `<div class="admin-thumb-placeholder">🎁</div>`;
+
+    const actionsHtml = item.claimed
+      ? `<span class="admin-badge claimed">Claimed ✓</span>`
+      : `<span class="admin-badge unclaimed">Available</span>
+         <a class="admin-arena-link" href="${item.arenaUrl}" target="_blank" rel="noopener">Edit on Are.na ↗</a>`;
+
+    const claimDetailsHtml = item.claimed ? `
+      <div class="admin-claim-details">
+        <div class="admin-claim-field"><label>Claimed by</label><span>${item.claimedBy}</span></div>
+        <div class="admin-claim-field"><label>Email</label><span>${item.claimedEmail}</span></div>
+        <div class="admin-claim-field"><label>Date</label><span>${item.claimedAt}</span></div>
+        <div class="admin-claim-field"><label>Gift note</label><span>${item.giftNote}</span></div>
+        <div class="admin-claim-field"><label>Tracking</label><span>${item.trackingNumber}</span></div>
+      </div>` : "";
+
+    el.innerHTML = `
+      <div class="admin-item-main">
+        ${thumbHtml}
+        <div class="admin-info">
+          ${priceStr ? `<p class="admin-item-price">${priceStr}</p>` : ""}
+          <p class="admin-item-name">${item.name}</p>
+          ${item.notes ? `<p class="admin-item-notes">${item.notes}</p>` : ""}
+          ${item.url ? `<a class="admin-item-url" href="${item.url}" target="_blank" rel="noopener">↗ Product link</a>` : ""}
+        </div>
+        <div class="admin-item-actions">
+          ${actionsHtml}
+        </div>
+      </div>
+      ${claimDetailsHtml}
+    `;
+
+    return el;
+  }
+})();
+</script>
+</body>
+</html>
